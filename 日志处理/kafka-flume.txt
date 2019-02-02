@@ -1,0 +1,156 @@
+*********************************kafka************************************
+kafka/bin目录下
+创建topic
+#创建一个有3个partition、1个副本的 test topic
+./kafka-topics.sh --zookeeper node1.hde.h3c.com:2181,node2.hde.h3c.com:2181,node3.hde.h3c.com:2181 --create --topic hszalog --replication-factor 1 --partitions 3
+
+
+创建producer #注意：DE安装后的broker端口为6667
+./kafka-console-producer.sh --broker-list node1.hde.h3c.com:6667,node2.hde.h3c.com:6667,node3.hde.h3c.com:6667 --topic hszalog
+
+
+创建consumer
+./kafka-console-consumer.sh --zookeeper node1.hde.h3c.com:2181,node2.hde.h3c.com:2181,node3.hde.h3c.com:2181 --topic hszalog --from-beginning
+
+查看kafka topics
+./kafka-topics.sh --zookeeper node1.hde.h3c.com:2181,node2.hde.h3c.com:2181,node3.hde.h3c.com:2181 --list
+
+./kafka-topics.sh --zookeeper node1.hde.h3c.com:2181,node2.hde.h3c.com:2181,node3.hde.h3c.com:2181 --describe --topic hszalog
+
+./kafka-topics.sh --delete --zookeeper node1.hde.h3c.com:2181,node2.hde.h3c.com:2181,node3.hde.h3c.com:2181 --topic hszalog
+
+**************************************flume*************************************
+
+单节点的agent  
+常用配置模式一
+# agent的名称为a1
+a1.sources = source1
+a1.channels = channel1
+a1.sinks = sink1
+
+# set source
+a1.sources.source1.type = spooldir
+a1.sources.source1.spoolDir=/data/hszalog
+a1.sources.source1.fileHeader = false
+
+# set sink
+a1.sinks.sink1.type = org.apache.flume.sink.kafka.KafkaSink
+a1.sinks.sink1.brokerList = node1.hde.h3c.com:6667,node3.hde.h3c.com:6667,node2.hde.h3c.com:6667
+a1.sinks.sink1.topic= hszalog
+
+# set channel
+a1.channels.channel1.type = file
+a1.channels.channel1.checkpointDir = /usr/hdp/2.3.4.0-3485/flume/flume_data/checkpoint
+a1.channels.channel1.dataDirs= /usr/hdp/2.3.4.0-3485/flume/flume_data/data
+
+# bind
+a1.sources.source1.channels = channel1
+a1.sinks.sink1.channel = channel1
+
+
+
+常用配置模式二
+agent.sources = s1
+agent.channels = c1
+agent.sinks = k1
+
+agent.sources.s1.type=exec
+agent.sources.s1.command=tail -F /usr/kf7899/data/log
+agent.sources.s1.channels=c1
+
+agent.channels.c1.type=memory
+agent.channels.c1.capacity=10000
+agent.channels.c1.transactionCapacity=100
+ 
+#设置Kafka接收器
+agent.sinks.k1.type= org.apache.flume.sink.kafka.KafkaSink
+#设置Kafka的broker地址和端口号
+agent.sinks.k1.brokerList=node1.hde.h3c.com:6667,node2.hde.h3c.com:6667,node3.hde.h3c.com:6667
+#设置Kafka的Topic
+agent.sinks.k1.topic=flumeTopic
+#设置序列化方式
+agent.sinks.k1.serializer.class=kafka.serializer.StringEncoder
+
+
+#agent.sources.s1.channels = c1
+agent.sinks.k1.channel=c1
+
+
+
+常用配置模式三
+Agent名称定义为agent.   
+Source:可以理解为输入端，定义名称为s1  
+channel：传输频道，定义为c1，设置为内存模式  
+sinks：可以理解为输出端，定义为sk1,  
+ 
+agent.sources = s1    
+agent.channels = c1  
+agent.sinks = sk1  
+ 
+#设置Source的内省为netcat 端口为5678，使用的channel为c1  
+agent.sources.s1.type = netcat  
+agent.sources.s1.bind = localhost  
+agent.sources.s1.port = 3456  
+agent.sources.s1.channels = c1  
+ 
+#设置Sink为logger模式，使用的channel为c1  
+agent.sinks.sk1.type = logger  
+agent.sinks.sk1.channel = c1  
+#设置channel信息  
+agent.channels.c1.type = memory #内存模式  
+agent.channels.c1.capacity = 1000     
+agent.channels.c1.transactionCapacity = 100 #传输参数设置
+
+
+
+常用配置模式四-同时监控追加内容与追加文件
+# Name the components on this agent
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+ 
+# Describe/configure the source
+a1.sources.r1.type = TAILDIR
+a1.sources.r1.channels = c1
+a1.sources.r1.positionFile = /home/web_admin/opt/v2_flume-apache170/logfile_stats/x1/taildir_position.json  
+a1.sources.r1.filegroups = f1                          
+a1.sources.r1.filegroups.f1 = /home/zl/xsvr/server/xgame_1/logs/act/zl_war.*log.*
+a1.sources.r1.headers.f1.headerKey1 = value1             
+a1.sources.r1.fileHeader = true
+ 
+ 
+# Describe the sink
+a1.sinks.k1.type = com.flume.dome.mysink.DBsqlSink
+a1.sinks.k1.hostname = jdbc:postgresql://192.168.20.243:5432
+#a1.sinks.k1.port = 5432
+a1.sinks.k1.databaseName = game_log
+a1.sinks.k1.tableName = zl_log_info
+a1.sinks.k1.user = game
+a1.sinks.k1.password = game123
+a1.sinks.k1.serverId = 1
+a1.sinks.k1.channel = c1
+a1.sinks.k1.josnTo = true
+ 
+# Use a channel which buffers events in memory
+a1.channels.c1.type = memory
+a1.channels.c1.capacity = 5000
+a1.channels.c1.transactionCapacity = 5000
+a1.channels.c1.transactionCapacity = 5000
+
+
+
+
+
+启动flume
+./flume-ng agent --conf conf --conf-file /usr/hdp/2.3.4.0-3485/flume/conf/kf7899-kafka-flume-exec1.conf --name agent -Dflume.root.logger=INFO,console
+后台启动
+nohup ./flume-ng agent --conf conf --conf-file /usr/hdp/2.3.4.0-3485/flume/conf/single_agent.conf --name a1 -Dflume.root.logger=INFO,console &
+
+
+
+创建文件并复制到flume监控目录
+echo -e "this is a test file! \nhttp://www.aboutyun.com">log.2
+mv log.2 /data/hszalog/
+
+org.apache.hadoop.hbase.security.access.SecureBulkLoadEndpoint
+
